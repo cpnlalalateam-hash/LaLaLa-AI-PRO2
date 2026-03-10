@@ -2,198 +2,214 @@ import streamlit as st
 import itertools
 import pandas as pd
 
-st.set_page_config(page_title="OddsDistortion Lab", layout="wide")
+st.set_page_config(page_title="オッズディストーションAI PRO", layout="wide")
 
-st.title("🏇 OddsDistortion Lab")
-st.caption("オッズ歪み検知 + 人気飛び確率AI")
+st.title("🐎 オッズディストーションAI PRO")
 
-# -----------------------------
-# サイドバー入力
-# -----------------------------
+st.caption("オッズ歪み + 人気構造 + メディア評価からレース危険度を解析")
 
-st.sidebar.header("オッズ入力")
+# -------------------
+# サイドバー
+# -------------------
 
-win = st.sidebar.number_input("単勝", 0.1, value=2.0)
-quinella = st.sidebar.number_input("馬連", 0.1, value=4.0)
-exacta = st.sidebar.number_input("馬単", 0.1, value=8.0)
-trio = st.sidebar.number_input("3連複", 0.1, value=12.0)
-trifecta = st.sidebar.number_input("3連単", 0.1, value=25.0)
+st.sidebar.header("① オッズ入力")
 
-st.sidebar.header("記事評価")
+win = st.sidebar.number_input("単勝", value=1.5)
+quinella = st.sidebar.number_input("馬連", value=3.5)
+exacta = st.sidebar.number_input("馬単", value=7.0)
+trio = st.sidebar.number_input("3連複", value=12.0)
+trifecta = st.sidebar.number_input("3連単", value=25.0)
 
-sentiment = st.sidebar.selectbox(
-    "メディア評価",
-    ["絶賛（死角なし）", "普通", "不安あり"]
+st.sidebar.header("② 人気構造")
+
+second_odds = st.sidebar.number_input("2番人気単勝", value=3.0)
+
+st.sidebar.header("③ メディア評価")
+
+sent = st.sidebar.selectbox(
+"記事評価",
+["絶賛（死角なし）","普通","不安"]
 )
 
-st.sidebar.header("馬番入力")
-
-horse_input = st.sidebar.text_input(
-    "人気1〜10位",
-    "1,2,3,4,5,6,7,8,9,10"
-)
-
-# -----------------------------
-# 馬番処理
-# -----------------------------
-
-horses = [h.strip() for h in horse_input.split(",") if h.strip()]
-
-if len(horses) < 5:
-    st.error("最低5頭入力してください")
-    st.stop()
-
-if len(set(horses)) != len(horses):
-    st.error("馬番が重複しています")
-    st.stop()
-
-# -----------------------------
-# 印
-# -----------------------------
-
-st.sidebar.header("予想印")
-
-honmei = st.sidebar.selectbox("◎ 本命", horses, index=0)
-taiko = st.sidebar.selectbox("○ 対抗", horses, index=1)
-tansho = st.sidebar.selectbox("▲ 単穴", horses, index=2)
-renka = st.sidebar.selectbox("△ 連下", horses, index=3)
-ana = st.sidebar.selectbox("× 穴", horses, index=4)
-
-marks = {
-    "◎": honmei,
-    "○": taiko,
-    "▲": tansho,
-    "△": renka,
-    "×": ana
-}
-
-# -----------------------------
-# 歪み計算
-# -----------------------------
+# -------------------
+# オッズ歪み
+# -------------------
 
 distortion = (
-    quinella / win +
-    exacta / quinella +
-    trio / exacta +
-    trifecta / trio
+(quinella / win) +
+(exacta / quinella) +
+(trio / exacta) +
+(trifecta / trio)
 )
 
-# -----------------------------
-# スコア
-# -----------------------------
+# -------------------
+# 人気集中度
+# -------------------
 
-score = 0
+concentration = second_odds / win
 
-if win >= 2:
-    score += 1
-
-if quinella >= 7:
-    score += 1
-
-if exacta >= 15:
-    score += 1
-
-if trio >= 15:
-    score += 1
-
-if trifecta >= 30:
-    score += 1
-
-if sentiment == "絶賛（死角なし）":
-    score += 1
-
-# -----------------------------
-# レース評価
-# -----------------------------
-
-if score == 0:
-    status = "鉄板レース"
-    comment = "本命信頼度高"
-
-elif score <= 2:
-    status = "標準レース"
-    comment = "平均的"
-
-elif score <= 4:
-    status = "波乱レース"
-    comment = "本命注意"
-
+if concentration < 1.2:
+    pop_state = "1強"
+elif concentration < 1.6:
+    pop_state = "やや1強"
+elif concentration < 2.5:
+    pop_state = "平均"
 else:
-    status = "崩壊レース"
-    comment = "人気崩壊警戒"
+    pop_state = "混戦"
 
-# -----------------------------
-# 人気飛び確率
-# -----------------------------
+# -------------------
+# 飛び確率
+# -------------------
 
-prob_table = {
-    0:15,
-    1:25,
-    2:40,
-    3:55,
-    4:70,
-    5:85,
-    6:90
-}
+risk = distortion * 5
 
-collapse_prob = prob_table.get(score,90)
+if pop_state == "混戦":
+    risk += 10
 
-# -----------------------------
+if sent == "不安":
+    risk += 10
+
+if sent == "絶賛（死角なし）":
+    risk -= 5
+
+risk = max(5, min(80, risk))
+
+# -------------------
+# レース危険度
+# -------------------
+
+if risk < 20:
+    race_state = "鉄板レース"
+    race_color = "success"
+elif risk < 35:
+    race_state = "標準レース"
+    race_color = "info"
+elif risk < 50:
+    race_state = "荒れ注意レース"
+    race_color = "warning"
+else:
+    race_state = "人気崩壊ゾーン"
+    race_color = "error"
+
+# -------------------
 # 表示
-# -----------------------------
-
-st.subheader("AI解析")
+# -------------------
 
 col1,col2,col3 = st.columns(3)
 
 with col1:
-    st.metric("レース判定", status)
-
-with col2:
     st.metric("オッズ歪み", round(distortion,2))
 
+with col2:
+    st.metric("人気構造", pop_state)
+
 with col3:
-    st.metric("1番人気飛び確率", f"{collapse_prob}%")
+    st.metric("1番人気飛び確率", f"{int(risk)}%")
 
-st.caption("歪み = (馬連/単勝)+(馬単/馬連)+(3連複/馬単)+(3連単/3連複)")
+st.subheader("AIレース判定")
 
-# -----------------------------
+if race_color == "success":
+    st.success(race_state)
+elif race_color == "warning":
+    st.warning(race_state)
+elif race_color == "error":
+    st.error(race_state)
+else:
+    st.info(race_state)
+
+# -------------------
+# 馬番入力
+# -------------------
+
+st.sidebar.header("④ 馬番入力")
+
+h_in = st.sidebar.text_input(
+"人気1〜10",
+"1,2,3,4,5,6,7,8,9,10"
+)
+
+horses = [h.strip() for h in h_in.split(",") if h.strip()]
+
+if len(horses) < 5:
+    st.warning("最低5頭必要です")
+    st.stop()
+
+# -------------------
+# 印
+# -------------------
+
+st.sidebar.header("⑤ 印")
+
+m1 = st.sidebar.selectbox("◎", horses)
+m2 = st.sidebar.selectbox("○", horses)
+m3 = st.sidebar.selectbox("▲", horses)
+m4 = st.sidebar.selectbox("△", horses)
+m5 = st.sidebar.selectbox("×", horses)
+
+marks = [m1,m2,m3,m4,m5]
+
+# -------------------
+# 資金
+# -------------------
+
+st.sidebar.header("⑥ 資金管理")
+
+budget = st.sidebar.number_input("予算", value=5000)
+unit = st.sidebar.number_input("1点金額", value=100)
+
+# -------------------
 # 買い目生成
-# -----------------------------
+# -------------------
 
-if st.button("買い目生成"):
+if st.button("🚀 AI買い目生成"):
 
-    ana_set = [marks["○"],marks["▲"],marks["△"],marks["×"]]
+    ana = [m2,m3,m4,m5]
 
-    used = set(marks.values())
+    a = list(itertools.combinations(ana,3))
+    c = list(itertools.combinations(ana,2))
 
-    unmarked = [h for h in horses if h not in used]
+    others = [h for h in horses if h not in marks]
 
-    g_bd = [marks["△"],marks["×"]] + unmarked
+    g = [m4,m5] + others
 
-    g_bd = list(set(g_bd) - {honmei})
+    b = [(m1,x,y) for x,y in itertools.combinations(g,2)]
+    d = [(m1,x) for x in g]
 
-    A = list(itertools.combinations(ana_set,3))
-    B = [tuple(sorted((honmei,p[0],p[1]))) for p in itertools.combinations(g_bd,2)]
-    C = list(itertools.combinations(ana_set,2))
-    D = [(honmei,o) for o in g_bd]
+    total_bets = len(a)+len(b)+len(c)+len(d)
+    cost = total_bets * unit
 
-    st.divider()
+    st.subheader("💰 資金シミュレーション")
 
-    c1,c2 = st.columns(2)
+    st.write(f"点数: {total_bets}")
+    st.write(f"必要資金: {cost}円")
 
-    with c1:
+    if cost > budget:
+        st.error("予算オーバー")
+    else:
+        st.success("予算内")
 
-        st.subheader(f"A:3連複BOX ({len(A)})")
-        st.code("\n".join([f"{a[0]}-{a[1]}-{a[2]}" for a in A]))
+    col1,col2 = st.columns(2)
 
-        st.subheader(f"C:馬連BOX ({len(C)})")
-        st.code("\n".join([f"{a[0]}-{a[1]}" for a in C]))
+    with col1:
 
-    with c2:
+        st.subheader(f"A:3連複BOX ({len(a)})")
 
-        st.subheader(f"B:3連複軸 ({len(B)})")
-        st.code("\n".join([f"{a[0]}-{a[1]}-{a[2]}" for a in B]))
+        df_a = pd.DataFrame(a,columns=["馬1","馬2","馬3"])
+        st.table(df_a)
 
-        st.subheader(f"D:馬連軸 ({len(D)})")
-        st.code("\n".join([f"{a[0]}-{a[1]}" for a in D]))
+        st.subheader(f"C:馬連BOX ({len(c)})")
+
+        df_c = pd.DataFrame(c,columns=["馬1","馬2"])
+        st.table(df_c)
+
+    with col2:
+
+        st.subheader(f"B:3連複軸 ({len(b)})")
+
+        df_b = pd.DataFrame(b,columns=["軸","馬1","馬2"])
+        st.table(df_b)
+
+        st.subheader(f"D:馬連軸 ({len(d)})")
+
+        df_d = pd.DataFrame(d,columns=["軸","相手"])
+        st.table(df_d)
